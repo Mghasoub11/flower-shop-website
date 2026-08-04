@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Flower Shop</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    background: #faf7f2;
+    color: #2e2a26;
+    margin: 0;
+    padding: 0 0 60px;
+  }
+  header {
+    background: #6b4c57;
+    color: #fff;
+    padding: 24px 20px;
+    text-align: center;
+  }
+  header h1 { margin: 0; font-weight: normal; letter-spacing: 1px; }
+  .container { max-width: 900px; margin: 0 auto; padding: 24px 20px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+  .tabs button {
+    flex: 1; padding: 10px; border: 1px solid #6b4c57; background: #fff;
+    color: #6b4c57; cursor: pointer; font-size: 15px; border-radius: 4px;
+  }
+  .tabs button.active { background: #6b4c57; color: #fff; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 16px; }
+  .card {
+    background: #fff; border: 1px solid #e6ddd3; border-radius: 8px;
+    padding: 16px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .card h3 { margin: 0; font-size: 17px; }
+  .card .price { color: #6b4c57; font-weight: bold; }
+  .card .stock { font-size: 13px; color: #888; }
+  .card button {
+    margin-top: 8px; padding: 8px; border: none; background: #6b4c57;
+    color: #fff; border-radius: 4px; cursor: pointer;
+  }
+  .card button:disabled { background: #ccc; cursor: not-allowed; }
+  .cart-row { display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 0; border-bottom: 1px solid #eee; }
+  .cart-row button { background: none; border: none; color: #b23; cursor: pointer; font-size: 13px; }
+  .total { text-align: right; font-size: 18px; margin: 16px 0; }
+  form input, form textarea {
+    width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc;
+    border-radius: 4px; font-family: inherit;
+  }
+  form button {
+    padding: 10px 20px; background: #6b4c57; color: #fff; border: none;
+    border-radius: 4px; cursor: pointer; font-size: 15px;
+  }
+  .msg { padding: 10px; border-radius: 4px; margin-bottom: 14px; }
+  .msg.ok { background: #e4f3e1; color: #2d6a1f; }
+  .msg.err { background: #fbe4e4; color: #a12; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<header><h1>🌸 Flower Shop</h1></header>
+
+<div class="container">
+  <div class="tabs">
+    <button id="tabProducts" class="active">Products</button>
+    <button id="tabCart">Cart (<span id="cartCount">0</span>)</button>
+  </div>
+
+  <div id="msg"></div>
+
+  <section id="viewProducts">
+    <div class="grid" id="productGrid">Loading products...</div>
+  </section>
+
+  <section id="viewCart" class="hidden">
+    <div id="cartList"></div>
+    <div class="total" id="cartTotal"></div>
+
+    <h3>Checkout</h3>
+    <form id="checkoutForm">
+      <input type="text" id="customerName" placeholder="Your name" required>
+      <input type="text" id="deliveryAddress" placeholder="Delivery address" required>
+      <button type="submit">Place Order</button>
+    </form>
+  </section>
+</div>
+
+<script>
+  // Change this if your backend runs on a different port
+  const API_BASE = 'http://localhost:3000';
+
+  const productGrid = document.getElementById('productGrid');
+  const cartList = document.getElementById('cartList');
+  const cartTotal = document.getElementById('cartTotal');
+  const cartCount = document.getElementById('cartCount');
+  const msgEl = document.getElementById('msg');
+
+  const viewProducts = document.getElementById('viewProducts');
+  const viewCart = document.getElementById('viewCart');
+  const tabProducts = document.getElementById('tabProducts');
+  const tabCart = document.getElementById('tabCart');
+
+  function showMsg(text, type) {
+    msgEl.innerHTML = `<div class="msg ${type}">${text}</div>`;
+    setTimeout(() => (msgEl.innerHTML = ''), 3000);
+  }
+
+  tabProducts.onclick = () => {
+    tabProducts.classList.add('active');
+    tabCart.classList.remove('active');
+    viewProducts.classList.remove('hidden');
+    viewCart.classList.add('hidden');
+  };
+
+  tabCart.onclick = () => {
+    tabCart.classList.add('active');
+    tabProducts.classList.remove('active');
+    viewCart.classList.remove('hidden');
+    viewProducts.classList.add('hidden');
+    loadCart();
+  };
+
+  async function loadProducts() {
+    try {
+      const res = await fetch(`${API_BASE}/products`);
+      const products = await res.json();
+      productGrid.innerHTML = products.map(p => `
+        <div class="card">
+          <h3>${p.name}</h3>
+          <div class="price">$${p.price}</div>
+          <div class="stock">${p.stock > 0 ? p.stock + ' in stock' : 'Out of stock'}</div>
+          <button ${p.stock <= 0 ? 'disabled' : ''} onclick="addToCart(${p.id})">
+            ${p.stock <= 0 ? 'Unavailable' : 'Add to cart'}
+          </button>
+        </div>
+      `).join('');
+    } catch (e) {
+      productGrid.innerHTML = 'Could not load products. Is the backend running on ' + API_BASE + '?';
+    }
+  }
+
+  async function addToCart(productId) {
+    try {
+      const res = await fetch(`${API_BASE}/cart/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId, quantity: 1 })
+      });
+      const data = await res.json();
+      if (!res.ok) return showMsg(data.error || 'Could not add to cart', 'err');
+      showMsg('Added to cart', 'ok');
+      updateCartCount(data.cart);
+    } catch (e) {
+      showMsg('Network error', 'err');
+    }
+  }
+
+  async function loadCart() {
+    const res = await fetch(`${API_BASE}/cart`);
+    const data = await res.json();
+    updateCartCount(data.cart);
+
+    if (data.cart.length === 0) {
+      cartList.innerHTML = '<p>Your cart is empty.</p>';
+      cartTotal.textContent = '';
+      return;
+    }
+
+    cartList.innerHTML = data.cart.map((item, i) => `
+      <div class="cart-row">
+        <span>${item.name} × ${item.quantity}</span>
+        <span>
+          $${(item.price * item.quantity).toFixed(2)}
+          <button onclick="removeFromCart(${i})">remove</button>
+        </span>
+      </div>
+    `).join('');
+    cartTotal.textContent = `Total: $${data.total.toFixed(2)}`;
+  }
+
+  async function removeFromCart(index) {
+    await fetch(`${API_BASE}/cart/${index}`, { method: 'DELETE' });
+    loadCart();
+  }
+
+  function updateCartCount(cart) {
+    cartCount.textContent = cart ? cart.length : 0;
+  }
+
+  document.getElementById('checkoutForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const customerName = document.getElementById('customerName').value;
+    const deliveryAddress = document.getElementById('deliveryAddress').value;
+    try {
+      const res = await fetch(`${API_BASE}/checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerName, deliveryAddress })
+      });
+      const data = await res.json();
+      if (!res.ok) return showMsg(data.error || 'Checkout failed', 'err');
+      showMsg(`Order #${data.order.orderId} placed successfully!`, 'ok');
+      e.target.reset();
+      loadCart();
+      loadProducts();
+    } catch (e) {
+      showMsg('Network error', 'err');
+    }
+  };
+
+  loadProducts();
+</script>
+
+</body>
+</html>
