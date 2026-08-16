@@ -1,83 +1,114 @@
 # Flower Shop — Project Documentation
 
-**Prepared by:** MOHAMMED G D AHMED
-**Date:** August 4, 2026
-**Repository:** https://github.com/Mghasoub11/flower-shop-website.git
+## 1. Project Purpose & Scope
 
----
+This project is a simple e-commerce web application for a flower shop. It allows customers to browse available flower products, add them to a shopping cart, and place an order with their name and delivery address. On the operations side, staff can manage the product catalog (add/update/delete products), track stock levels to prevent overselling, update order status (pending → processing → delivered), and look up past orders through a dedicated admin panel.
 
-## 1. Project Objective and Scope
+## 2. Technologies & Tools Used
 
-This project is a simple e-commerce web application for a flower shop. It allows
-customers to browse available flower products, add them to a shopping cart, and
-place an order with their name and delivery address. On the operations side, staff
-can manage the product catalog (add/update/delete products), track stock levels to
-prevent overselling, update order status (pending → processing → delivered), and
-look up past orders.
+| Layer | Technology |
+|---|---|
+| Frontend | HTML, CSS, vanilla JavaScript |
+| Backend | Node.js, Express.js |
+| Database | SQLite (via `better-sqlite3`) |
+| Version Control | Git & GitHub |
+| Deployment | Render (free tier) |
 
-The scope covers:
-- Customer-facing flow: browse products → add to cart → checkout
-- Staff-facing flow: manage products, view/update order status, look up orders
-- Data persistence for both products and orders (no data lost on server restart)
+SQLite was chosen over a cloud database (originally Firebase was considered) because it is free, lightweight, and requires no external account or billing setup — suitable for the scope of a school project with a single small dataset.
 
-Out of scope for this version: user authentication/login, payment processing, and
-admin UI (staff operations are exposed as API endpoints rather than a dashboard).
+## 3. Overall Architecture
 
-## 2. Frontend Technologies
+The application follows a simple client-server architecture:
 
-- **HTML5 / CSS3** for structure and styling
-- **Vanilla JavaScript (fetch API)** for communicating with the backend
+- The **frontend** (static HTML/CSS/JS in the `fronted` folder) is served directly by the Express server.
+- The **backend** (`backend/server.js`) exposes a REST API for products, orders, and admin authentication.
+- The **database** (`backend/flowershop.db`) stores products and orders in two tables, initialized automatically on first run.
 
-These were chosen for simplicity and to keep the project dependency-free — no build
-step, no framework overhead — which fits the scale of a single small shop with a
-handful of pages (product list, cart, checkout confirmation).
+```
+Browser  <-->  Express server (server.js)  <-->  SQLite database (flowershop.db)
+```
 
-## 3. Backend Technologies
+## 4. Frontend Structure
 
-- **Node.js** as the runtime
-- **Express.js** as the web framework, handling routing for products, cart, and
-  orders (`GET/POST/PUT/DELETE /products`, `POST /cart/add`, `GET /cart`,
-  `DELETE /cart/:index`, `POST /checkout`, `GET /orders`, `PATCH /orders/:id/status`)
+- `index.html` / `script.js` / `style.css` — customer-facing storefront: browsing products and placing orders.
+- `admin.html` — admin panel: login form, products table with add/delete, orders table with status updates.
 
-Express was chosen because it's lightweight, has a huge ecosystem, and is
-straightforward to learn — ideal for a project this size where a heavier framework
-(NestJS, etc.) would be overkill.
+The admin panel communicates with the backend using `fetch()` calls with `credentials: 'include'` so that session cookies are sent with each request.
 
-## 4. Database Technology
+## 5. Backend Structure
 
-- **SQLite**, accessed via the **better-sqlite3** npm package
+`backend/server.js` sets up an Express app with the following responsibilities:
 
-Two tables: `products` (id, name, price, category, description, stock) and `orders`
-(id, customer_name, delivery_address, items, total, status, created_at).
+- Serves static frontend files.
+- Handles admin authentication using a simple in-memory session token stored in an HTTP-only cookie.
+- Exposes REST endpoints for products and orders (see table below).
 
-## 5. Why These Technologies
+### API Endpoints
 
-- **SQLite/better-sqlite3** instead of a cloud database like Firebase: it's fully
-  open-source, requires no external account or internet dependency to run, and still
-  gives real SQL (joins, constraints, transactions) rather than a NoSQL document
-  store. For a project of this size, a single-file embedded database is simpler to
-  set up, test, and grade than provisioning a cloud service — while still being a
-  production-grade choice for small applications.
-- **Express.js**: minimal boilerplate, well-documented, and directly matches what's
-  being taught in the course, so it's easy to explain each route's purpose.
-- **Vanilla JS frontend**: avoids adding a framework's learning curve/build tooling
-  when the UI itself is simple (a handful of views), keeping the whole stack easy to
-  reason about end-to-end.
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| POST | `/admin/login` | Public | Authenticates admin, sets session cookie |
+| POST | `/admin/logout` | Public | Clears session cookie |
+| GET | `/admin/check` | Public | Checks if a valid admin session exists |
+| GET | `/products` | Public | Lists all products |
+| POST | `/products` | Admin only | Adds a new product |
+| DELETE | `/products/:id` | Admin only | Deletes a product |
+| POST | `/orders` | Public | Places a new order |
+| GET | `/orders` | Admin only | Lists all orders |
+| PATCH | `/orders/:id/status` | Admin only | Updates an order's status |
 
----
+## 6. Database Structure
 
-## Current System vs. Real-World Requirements
+**products**
 
-**What the base system does:**
-- Customers can view products and their prices
-- Customers can add items to a cart and view it
-- Customers can check out, which saves the order
+| Column | Type |
+|---|---|
+| id | INTEGER PRIMARY KEY |
+| name | TEXT |
+| price | REAL |
+| category | TEXT |
+| description | TEXT |
+| stock | INTEGER |
 
-**Gaps identified and addressed:**
+**orders**
 
-| Gap | Why it matters | How it's solved |
-|---|---|---|
-| No inventory tracking | A product could be "sold" more times than exist in stock | `stock` column on products; checkout validates and decrements stock, rejecting orders that exceed available stock |
-| No order status | Staff can't tell what's pending vs. delivered | `status` column on orders (`pending`/`processing`/`delivered`), updatable via `PATCH /orders/:id/status` |
-| No way to manage products without editing code | Shop owner isn't a developer | Full CRUD on products: `POST/PUT/DELETE /products/:id` |
-| No way to look up past orders | Customer service needs order history | `GET /orders` (staff, all orders) and `GET /orders/:id` (lookup by id) |
+| Column | Type |
+|---|---|
+| id | INTEGER PRIMARY KEY |
+| customer_name | TEXT |
+| delivery_address | TEXT |
+| items | TEXT (JSON) |
+| total | REAL |
+| status | TEXT (pending / processing / delivered) |
+| created_at | TEXT (timestamp) |
+
+## 7. Main Features
+
+- Public product listing.
+- Order placement with customer name, delivery address, and item list.
+- Admin login/logout with session-based authentication.
+- Admin dashboard: view products, add products, delete products.
+- Admin order management: view all orders, update order status.
+- Stock tracking to avoid overselling.
+
+## 8. Technical Considerations & Decisions
+
+- **Simple session auth**: Instead of a full user/roles system, a single hardcoded admin account with an in-memory session token was used, appropriate for the scope of this project.
+- **Environment-based port**: The server reads `process.env.PORT` (falling back to a default) so it works both locally and on Render, which assigns its own port dynamically.
+- **Static file serving**: Express serves the frontend directly, so the whole app (frontend + backend) is deployed as a single service.
+
+## 9. Problems Encountered & Solutions
+
+During development, a Git merge between two separate project repositories (this Flower Shop project and a second, unrelated GIS project from the same course) was resolved incorrectly, which caused the GIS project's backend code to overwrite `server.js` in this repository. This was discovered when the deployed site failed to behave like a flower shop backend.
+
+**Resolution:** The correct frontend (`admin.html`, `index.html`, `script.js`, `style.css`) and database file (`db.js`) were confirmed to be intact from earlier commits and file inspection. `server.js` was then rewritten from scratch to match the existing frontend's expected API contract (endpoints, request/response shapes), restoring full functionality including the admin login, product management, and order management features. The corrected code was tested locally before being committed and pushed to GitHub.
+
+## 10. Deployment Process
+
+1. Ensured `package.json` contains a `start` script (`node server.js`) and the server reads the port from `process.env.PORT`.
+2. Created a new Web Service on [Render](https://render.com), connected to the GitHub repository.
+3. Configured Build Command: `npm install`, Start Command: `npm start`, on Render's free tier.
+4. Render automatically builds and deploys on every push to the `main` branch.
+
+**Live URL:** https://flower-shop-website-xmej.onrender.com
+**Admin Panel:** https://flower-shop-website-xmej.onrender.com/admin.html
