@@ -1,4 +1,4 @@
-fetch('http://localhost:3000/products')
+fetch('/products')
   .then(res => res.json())
   .then(products => {
     const container = document.getElementById('products');
